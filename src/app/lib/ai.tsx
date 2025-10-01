@@ -38,8 +38,11 @@ export function scoreAnswer(
   level: "easy" | "medium" | "hard"
 ): number {
   if (!answer || answer.trim().length === 0) return 0;
+
   const len = answer.trim().length;
   const max = levelMeta[level].maxScore;
+
+  // Basic scoring: 1 point per 10 chars, capped by maxScore
   return Math.min(Math.floor(len / 10), max);
 }
 
@@ -48,8 +51,13 @@ export function summarizeCandidate(
   questions: Question[],
   finalScore: number
 ) {
+  // Strengths: questions with score >= 50% of max for that level
   const strengths = questions
-    .filter((q) => Number(q.score) >= 5)
+    .filter((q) => {
+      const score = Number(q.score ?? 0);
+      const threshold = levelMeta[q.level].maxScore / 2;
+      return score >= threshold;
+    })
     .map((q) => q.text)
     .slice(0, 3);
 

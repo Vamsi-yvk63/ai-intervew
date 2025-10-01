@@ -1,4 +1,5 @@
 /* globals.css */
+@import "tailwindcss";
 html,
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;

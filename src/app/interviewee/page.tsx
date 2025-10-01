@@ -1,10 +1,11 @@
 // app/interviewee/page.tsx
 "use client";
+
 import React, { useEffect, useState } from "react";
 import ResumeUploader from "../components/ResumeUploader";
+import QuestionTimer from "../components/QuestionTimer";
 import { generateQuestions, scoreAnswer, summarizeCandidate } from "../lib/ai";
 import { useInterviewStore } from "../store/useInterviewStore";
-import QuestionTimer from "../components/QuestionTimer";
 import { v4 as uuidv4 } from "uuid";
 
 export default function IntervieweePage() {
@@ -19,28 +20,32 @@ export default function IntervieweePage() {
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [running, setRunning] = useState(false);
   const [answerText, setAnswerText] = useState("");
+
   const setActiveCandidate = useInterviewStore((s) => s.setActiveCandidate);
   const updateCandidate = useInterviewStore((s) => s.updateCandidate);
   const activeCandidate = useInterviewStore((s) => s.activeCandidate);
 
-  const [questions, setQuestions] = useState(() => generateQuestions());
+  const [questions, setQuestions] = useState(generateQuestions());
 
+  const durations: Record<string, number> = { easy: 20, medium: 60, hard: 120 };
+
+  // Initialize candidate when starting interview
   useEffect(() => {
-    if (stage === "interview" && !activeCandidate) {
+    if (stage === "interview" && !activeCandidate && extracted) {
       const id = uuidv4();
       const c = {
         id,
-        name: extracted?.name || "Unknown",
-        email: extracted?.email || "",
-        phone: extracted?.phone || "",
+        name: extracted.name || "Unknown",
+        email: extracted.email || "",
+        phone: extracted.phone || "",
         questions,
         summary: undefined,
-        finalScore: undefined,
+        finalScore: 0,
         completed: false,
       };
       setActiveCandidate(c);
     }
-  }, [stage]);
+  }, [stage, extracted, activeCandidate, setActiveCandidate, questions]);
 
   useEffect(() => {
     if (activeCandidate && stage === "interview") {
@@ -48,14 +53,13 @@ export default function IntervieweePage() {
     }
   }, [activeCandidate, stage]);
 
-  const durations = { easy: 20, medium: 60, hard: 120 };
-
   function startInterview() {
     if (!extracted?.name || !extracted?.email) {
       alert("Please provide name and email before starting.");
       return;
     }
-    setQuestions(generateQuestions());
+    const newQs = generateQuestions();
+    setQuestions(newQs);
     setStage("interview");
     setCurrentQIndex(0);
     setRunning(true);
@@ -63,10 +67,12 @@ export default function IntervieweePage() {
 
   function submitAnswer() {
     const q = questions[currentQIndex];
-    const s = scoreAnswer(answerText, q.level);
+    if (!q) return;
+
+    const score = scoreAnswer(answerText, q.level);
     const updatedQs = questions.map((qq, idx) =>
       idx === currentQIndex
-        ? { ...qq, answer: answerText, score: String(s) }
+        ? { ...qq, answer: answerText, score: score.toString() }
         : qq
     );
 
@@ -84,14 +90,15 @@ export default function IntervieweePage() {
         0
       );
       if (activeCandidate) {
+        const summaryText = summarizeCandidate(
+          activeCandidate.name,
+          updatedQs,
+          finalScore
+        );
         updateCandidate(activeCandidate.id, {
           questions: updatedQs,
           finalScore,
-          summary: summarizeCandidate(
-            activeCandidate.name,
-            updatedQs,
-            finalScore
-          ),
+          summary: JSON.stringify(summaryText),
           completed: true,
         });
       }
@@ -104,7 +111,9 @@ export default function IntervieweePage() {
     submitAnswer();
   }
 
-  // --- UI stages ---
+  // --- UI Stages ---
+
+  // 1️⃣ Upload Resume
   if (stage === "upload") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8">
@@ -116,7 +125,7 @@ export default function IntervieweePage() {
           <button
             onClick={() => setStage("confirm")}
             disabled={!extracted}
-            className="mt-6 w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+            className="mt-6 w-full bg-blue-600 text-black px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             Continue ➝
           </button>
@@ -125,6 +134,7 @@ export default function IntervieweePage() {
     );
   }
 
+  // 2️⃣ Confirm Details
   if (stage === "confirm") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8">
@@ -167,7 +177,7 @@ export default function IntervieweePage() {
             </button>
             <button
               onClick={startInterview}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-6 py-2 bg-blue-600 text-black rounded-lg hover:bg-blue-700"
             >
               Start Interview
             </button>
@@ -177,8 +187,11 @@ export default function IntervieweePage() {
     );
   }
 
+  // 3️⃣ Interview Stage
   if (stage === "interview") {
     const q = questions[currentQIndex];
+    if (!q) return null;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8 flex justify-center items-center">
         <div className="max-w-2xl w-full bg-white/90 rounded-2xl shadow-xl p-8">
@@ -192,11 +205,10 @@ export default function IntervieweePage() {
             : {q.text}
           </p>
           <QuestionTimer
-            duration={durations[q.level]}
+            duration={durations[q.level] || 30}
             onTimeUp={handleTimeUp}
             running={running}
           />
-
           <textarea
             className="w-full mt-4 border rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
             rows={6}
@@ -206,7 +218,7 @@ export default function IntervieweePage() {
           />
           <button
             onClick={submitAnswer}
-            className="mt-4 w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
+            className="mt-4 w-full bg-blue-600 text-black px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition"
           >
             Submit Answer
           </button>
@@ -215,6 +227,7 @@ export default function IntervieweePage() {
     );
   }
 
+  // 4️⃣ Done Stage
   if (stage === "done") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-blue-100 p-8">

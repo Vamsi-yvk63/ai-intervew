@@ -1,39 +1,57 @@
 // components/ResumeUploader.tsx
 "use client";
+
 import React, { useState } from "react";
-import { CloudUpload, FileText } from "lucide-react"; // install lucide-react for icons
+import { CloudUpload, FileText } from "lucide-react"; // Make sure lucide-react is installed
 
-type Extracted = { name?: string; email?: string; phone?: string };
+type Extracted = {
+  name?: string;
+  email?: string;
+  phone?: string;
+};
 
-export default function ResumeUploader({
-  onExtract,
-}: {
-  onExtract: (d: Extracted) => void;
-}) {
+interface ResumeUploaderProps {
+  onExtract: (data: Extracted) => void;
+}
+
+export default function ResumeUploader({ onExtract }: ResumeUploaderProps) {
   const [fileName, setFileName] = useState<string | null>(null);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setFileName(file.name);
 
-    const text = await file.text(); // simple text extraction
-    // Regex heuristics for demo
-    const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-    const phoneMatch = text.match(/(\+?\d[\d\-\s]{7,}\d)/);
-    const nameMatch =
-      text.match(/Name[:\s]*([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/m) ||
-      text
-        .split(/\r?\n/)
-        .find((line) => /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(line));
+    try {
+      const text = await file.text();
 
-    onExtract({
-      name: nameMatch
-        ? (nameMatch[1] || nameMatch).toString().trim()
-        : undefined,
-      email: emailMatch ? emailMatch[0] : undefined,
-      phone: phoneMatch ? phoneMatch[0] : undefined,
-    });
+      // Simple regex heuristics for demo purposes
+      const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+      const phoneMatch = text.match(/(\+?\d[\d-\s]{7,}\d)/);
+
+      const nameMatch =
+        text.match(/Name[:\s]*([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/m) ||
+        text
+          .split(/\r?\n/)
+          .find((line) => /^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$/.test(line));
+
+      onExtract({
+        name: nameMatch
+          ? (Array.isArray(nameMatch)
+              ? nameMatch[1] || nameMatch[0]
+              : nameMatch
+            )
+              .toString()
+              .trim()
+          : undefined,
+        email: emailMatch ? emailMatch[0] : undefined,
+        phone: phoneMatch ? phoneMatch[0] : undefined,
+      });
+    } catch (err) {
+      console.error("Failed to read file:", err);
+      onExtract({});
+    }
   }
 
   return (

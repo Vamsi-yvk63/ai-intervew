@@ -18,7 +18,7 @@ export type Candidate = {
   phone?: string;
   questions: Question[];
   summary?: string;
-  finalScore: number;
+  finalScore?: number;
   completed: boolean;
 };
 
